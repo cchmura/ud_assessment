@@ -460,6 +460,20 @@ The ingestion layer is designed for reliability, scalability, and standardizatio
 - Kafka consumer groups maintain offset tracking for exactly-once processing.
 
 ##
+## Error Handling & DLQ Flow  
+
+Messages that fail validation, transformation, or enrichment are routed into a **Kafka Dead Letter Queue (DLQ)** to avoid pipeline disruption.
+
+```
+Processing Error → Dead Letter Queue → Manual Review → Reprocess/Discard
+     │                    │                │               │
+     │                    │                │               └─ Fixed message → Normal flow
+     │                    │                └─ Human intervention
+     │                    └─ Kafka DLQ topic
+     └─ Circuit breaker activation
+```
+
+##
 ## Monitoring and Alerting
 - Ingest service metrics: throughput, latency, queue depth
 - Kafka metrics: lag, partition health, replication status
