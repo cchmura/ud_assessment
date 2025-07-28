@@ -131,7 +131,7 @@ Each account gets identical infrastructure topology, just different sizing. Lear
 **AWS Services (the managed stuff):**
 - Amazon EKS - Kubernetes without the operational nightmare
 - Amazon MSK - Kafka that doesn't require a dedicated ops team
-- Amazon RDS PostgreSQL - Multi-AZ because downtime is not an option
+- Amazon Aurora PostgreSQL (Multi-AZ) - fully managed, high-performance relational database for operational data.
 - Amazon ElastiCache Redis - Cluster mode for that sweet horizontal scaling
 - Self-managed ClickHouse on EC2 (`r5.4xlarge` with NVMe SSD) - because managed time-series DBs aren't mature enough yet
 
@@ -190,7 +190,9 @@ All the adapters normalize to unified Protobuf schema before hitting our interna
 ## 4. Data Storage Strategy
 
 ### Operational Storage
-- **PostgreSQL (RDS Multi-AZ)**: Metadata, configuration, user management stuff
+- **Aurora PostgreSQL (Multi-AZ)**:
+  - Stores operational metadata (game details, teams/players, scheduling).
+  - Application configuration, user management, and audit logging.
 - **Redis (ElastiCache Cluster)**: Real-time odds caching with 5-10s TTL
 - **RDS Proxy** for connection pooling because PostgreSQL connection limits are real
 
@@ -291,7 +293,7 @@ Kafka producers with `enable.idempotence=true`. Consumer offset commits only aft
 
 **Software versions we're standardizing on:**
 - Kafka: MSK 2.8+ with KRaft mode
-- PostgreSQL: RDS 14+ with logical replication enabled
+- PostgreSQL: Aurora PostgreSQL compatible, version 14+
 - Redis: ElastiCache 7.0+ with cluster mode
 - ClickHouse: 22.8+ (latest stable)
 
@@ -465,7 +467,7 @@ During major events (Super Bowl, NBA Finals), traffic spikes 10-50x normal level
 **DR testing** quarterly during off-season periods with automated runbooks. **Partner communication** with automated DR notifications to external consumers.
 
 **Detailed backup strategy:**
-- **PostgreSQL**: Daily snapshots, 30-day retention, PITR to 5-minute granularity
+- **Aurora PostgreSQL**: Automated daily snapshots, 30-day retention, continuous backups, and point-in-time recovery.
 - **ClickHouse**: Incremental S3 backups every 4 hours, full weekly, monthly restore testing
 - **Kafka**: Cross-AZ replication (RF=3), topic backup to S3 for replay
 - **Redis**: Daily RDB snapshots (non-critical, can rebuild)
