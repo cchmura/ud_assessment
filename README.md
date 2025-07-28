@@ -288,7 +288,7 @@ Publish to Kafka + Store in ClickHouse
 
 ##
 ## Decision: Data Transformation and Enrichment
-- Convert raw feed formats into a standard protobuf or JSON schema.
+- Convert raw feed formats into a standard Protobuf as the standard serialization format for all internal messaging and data contracts schema.
 - Enrich messages with metadata (player/team info, game context, latency metrics).
 - Add internal tracking data (event time, source ID, versioning).
 
@@ -418,7 +418,7 @@ While Kafka is the preferred ingestion backbone due to its performance, durabili
 
 ##
 ## Message Format and Protocol Handling
-- All adapters normalize external formats (e.g., XML, JSON, Protobuf) to an **internal unified schema** before publishing to Kafka.
+- All adapters normalize external formats (e.g., XML, External sources may send data as JSON, which is transformed into Protobuf internally to ensure performance and schema consistency) to an **internal unified schema** before publishing to Kafka.
 - Lightweight Go or Python services can be used for protocol adaptation and validation.
 
 ##
