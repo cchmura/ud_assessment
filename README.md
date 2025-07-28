@@ -24,10 +24,30 @@ Here's my approach to building this sports odds platform. The core pipeline is s
 
 ---
 
+## 📚 Table of Contents
+
+1. [System Architecture Overview](#1-system-architecture-overview)  
+2. [Infrastructure Foundation](#2-infrastructure-foundation)  
+3. [Data Pipeline Architecture](#3-data-pipeline-architecture)  
+4. [Data Storage Strategy](#4-data-storage-strategy)  
+5. [Message Streaming & Cross-Account Integration](#5-message-streaming--cross-account-integration)  
+6. [Observability & Operations](#6-observability--operations)  
+7. [Infrastructure as Code & Deployment](#7-infrastructure-as-code--deployment)  
+8. [Game Day Operations & Reliability](#8-game-day-operations--reliability)  
+9. [Technical Risks & Domain Challenges](#9-technical-risks--domain-challenges)  
+10. [Cost Optimization & Production Lessons](#10-cost-optimization--production-lessons)  
+11. [Security, Compliance & Disaster Recovery](#11-security-compliance--disaster-recovery)  
+12. [Things That Will Probably Break](#12-things-that-will-probably-break)  
+13. [Key Success Factors](#13-key-success-factors)
+
+---
+
 ## 1. System Architecture Overview
 
 ### The Big Picture
 Event-driven microservices with sport-specific isolation. Basically each sport (NFL/NBA/MLB) gets its own processing pipeline so when NFL traffic goes nuts, it doesn't kill NBA performance.
+
+![System Architecture](./diagrams/ud_hl_a.png)
 
 ```mermaid
 flowchart TD
