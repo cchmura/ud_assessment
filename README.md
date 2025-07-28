@@ -273,15 +273,17 @@ The odds update pipeline spans from external feed ingestion through to streaming
 ##
 ## Decision: Pipeline Structure
 
-Feed Input (Kafka/Push/PubSub)  
-  ↓  
-Ingest Service (per sport)  
-  ↓  
-Normalization & Validation  
-  ↓  
-Odds Calculation Service  
-  ↓  
-Publish to Kafka + Store in ClickHouse
+```text
+Raw Feed Data → Normalized Event → Enriched Event → Calculated Odds → Stored Result
+     │               │                  │                │               │
+     │               │                  │                │               ├─ Hot Cache (Redis)
+     │               │                  │                │               ├─ Analytics (ClickHouse)
+     │               │                  │                │               └─ Stream (External Kafka)
+     │               │                  │                └─ Odds algorithms
+     │               │                  └─ Player/team context
+     │               └─ Schema validation
+     └─ Protocol conversion
+```
 
 - Ingestion services normalize disparate feed formats into a unified schema.
 - Processing services calculate odds and enrich data before routing to Kafka and ClickHouse.
