@@ -230,6 +230,16 @@ Going with **self-managed ClickHouse** on EC2 because the managed options aren't
 
 **Performance tuning**: SSD storage, optimized network throughput. Using **Kafka 2.8+** with KRaft mode (because Zookeeper is legacy at this point).
 
+**Kafka Broker Strategy**:
+- Single centralized internal Kafka cluster (MSK) handling internal event flow.
+- Dedicated Kafka topic(s) specifically exposed to external consumers in separate AWS accounts.
+- Connectivity via AWS PrivateLink or Transit Gateway ensures secure cross-account access without public internet exposure.
+
+**External Consumers**:
+- Consumers in external accounts connect via secure IAM role assumptions and ACL configurations.
+- Detailed consumer lag monitoring ensures immediate detection and resolution of external client issues.
+
+
 ### Cross-Account Kafka Integration 
 
 This is where it gets interesting. External consumers in partner AWS accounts need to consume from our topics with different SLA requirements.
