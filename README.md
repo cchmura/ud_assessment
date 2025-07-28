@@ -1,4 +1,4 @@
-# Real-Time Sports Odds Infrastructure Design
+# Real-Time Sports Odds Infrastructure Architecture
 
 ## Sr. Infrastructure Engineer Take-Home Assessment
 
@@ -6,11 +6,11 @@
 
 ## Executive Summary
 
-Here's my approach to building this sports odds platform. The core pipeline is straightforward: ingest live sports feeds, run odds calculations on the events, and stream results to external partners via Kafka. The challenge is scale - NFL games pump out 300M events per game, which translates to roughly 125K messages/sec during peak Sunday traffic. NBA and MLB are much more manageable in comparison.
+Here's my approach to building this sports odds platform. The core pipeline is straightforward: ingest live sports feeds, run odds calculations on the events, and stream results to external partners via Kafka. The challenge is scale - NFL games pump out 300M events per game, which translates to burst peaks of ~238K messages/sec, with sustained averages closer to 125K/sec during peak Sunday traffic. NBA and MLB are much more manageable in comparison.
 
 **Scope Note**: This went way beyond the 2-3 hour suggestion because I got carried away thinking through all the ways this could break in production. The core decisions are in sections 1-4, the rest is "what happens when everything goes wrong" planning.
 
-**Architecture choices (and why):**
+## Architecture choices (and why):
 - **Amazon EKS** - I'm not debugging etcd corruption at 2am during the Super Bowl
 - **Kafka (MSK)** - Everything talks through topics so services don't directly depend on each other  
 - **ClickHouse** - Really fast for time-series data, like 100x faster than Postgres for aggregations
@@ -20,7 +20,7 @@ Here's my approach to building this sports odds platform. The core pipeline is s
 **What we're aiming for:**
 - 99%+ uptime (100% during games or we're all fired)
 - P50: 1-3s, P99: <5s latency 
-- Peak throughput: 100K+ messages/sec without falling over
+- Peak throughput: up to 238K messages/sec (burst), with 125K/sec sustained targets without falling over
 
 ---
 
@@ -101,17 +101,17 @@ flowchart TD
 
 ### Traffic Reality Check
 
-| Sport | Updates/Game | Peak Rate | Concurrent Games | Total Peak Load |
+| Sport | Updates/Game | Peak Rate | Concurrent Games | Total Peak Load (burst) |
 |-------|--------------|-----------|------------------|-----------------|
-| NFL   | 300M         | ~21K/sec  | 4-6 games        | ~125K/sec       |
+| NFL   | 300M         | ~28K/sec  | 4-6 games        | ~238K/sec       |
 | NBA   | 400K         | ~55/sec   | 5-8 games        | ~440/sec        |
 | MLB   | 200K         | ~18/sec   | 3-5 games        | ~90/sec         |
 
-NFL is the monster here. Sunday 1pm games all kick off together and suddenly we're processing 125K messages/sec. NBA and MLB are basically rounding errors compared to that.
+NFL is the monster here. Sunday 1pm games all kick off together and suddenly we're processing 125K/sec sustained average. NBA and MLB are basically rounding errors compared to that.
 
 **Storage estimates:**
-- Hot data in ClickHouse: ~3TB (30 days)
-- Annual cold storage: ~40TB in S3
+- Hot data in ClickHouse: ~5TB (30 days)
+- Annual cold storage: ~60TB in S3
 - Kafka retention: 7 days (because disk is cheap)
 
 ---
@@ -234,7 +234,7 @@ Going with **self-managed ClickHouse** on EC2 because the managed options aren't
 
 **PostgreSQL**: Automated daily snapshots with 30-day retention, point-in-time recovery down to 5-minute granularity.
 
-**ClickHouse**: Incremental S3 backups every 4 hours, full backup weekly. Monthly restore testing because untested backups are just expensive hope.
+**ClickHouse**: Continuous replication to standby cluster + incremental S3 backups every hour, full backup weekly. Monthly restore testing because untested backups are just expensive hope.
 
 **Kafka**: Cross-AZ replication (RF=3), plus topic backup to S3 for replay scenarios.
 
@@ -287,9 +287,7 @@ Topic: nfl.odds.live
 
 **Real-world integration patterns:**
 
-*High-volume partners (Tier 1 sportsbooks)::*
-- Dedicated Kafka cluster to isolate their traffic
-- Reserved bandwidth allocation during peak events
+- - Reserved bandwidth allocation during peak events
 - Failover topics for when their stuff breaks
 
 *Multi-region partners (Global or DR-sensitive clients):*
@@ -443,8 +441,8 @@ During major events (Super Bowl, NBA Finals), traffic spikes 10-50x normal level
 **Monthly cost estimates:**
 - Peak season (Oct-Jan): ~$12K/month
 - Off-season (Mar-Aug): ~$3K/month  
-- Annual average: ~$8K/month
-- Cost per million updates: ~$0.08
+- Annual average: ~$7.5K/month
+- Cost per million updates: ~$0.05
 
 ### Lessons from Real Sports Betting Infrastructure
 
