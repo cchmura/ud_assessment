@@ -41,28 +41,34 @@ flowchart TD
     NBAPush --> NBAIngest["NBA Ingest Adapter (Go Service)"]
     MLBPubSub --> MLBIngest["MLB Ingest Adapter (Go Service)"]
 
-    %% Internal Kafka
-    NFLIngest --> RawKafka["Internal Kafka Cluster Topics: nfl.raw, nba.raw, mlb.raw Partitions: 50/10/5 Replication: 3x"]
+    %% Internal Kafka (Raw Topics)
+    NFLIngest --> RawKafka["Internal Kafka: nfl.raw, nba.raw, mlb.raw"]
     NBAIngest --> RawKafka
     MLBIngest --> RawKafka
 
     %% Processing Pipeline
-    RawKafka --> Normalizer["Event Normalizer • Schema validation • Format standardization • Deduplication"]
-    Normalizer --> NormKafka["Internal Kafka Normalized Topics"]
-    
+    RawKafka --> Normalizer["Event Normalizer • Schema validation • Deduplication"]
+    Normalizer --> NormKafka["Internal Kafka: nfl.normalized, nba.normalized, mlb.normalized"]
+
+    %% Odds Calculators
     NormKafka --> NFLOdds["NFL Odds Calculator (Python/Rust)"]
     NormKafka --> NBAOdds["NBA Odds Calculator (Python/Rust)"]
     NormKafka --> MLBOdds["MLB Odds Calculator (Python/Rust)"]
 
-    %% Output
-    NFLOdds --> Publisher["Odds Publisher Service"]
-    NBAOdds --> Publisher
-    MLBOdds --> Publisher
+    %% Odds Kafka Topics (Calculated Odds)
+    NFLOdds --> OddsKafka["Internal Kafka: nfl.odds, nba.odds, mlb.odds"]
+    NBAOdds --> OddsKafka
+    MLBOdds --> OddsKafka
     
-    Publisher --> Redis["Redis Cache Cluster Mode"]
-    Publisher --> ClickHouse["ClickHouse Analytics ReplacingMergeTree"]
+    %% Publisher Service consuming Odds topics
+    OddsKafka --> Publisher["Odds Publisher Service"]
+
+    %% Output destinations
+    Publisher --> Redis["Redis Cache Cluster"]
+    Publisher --> ClickHouse["ClickHouse Analytics"]
     Publisher --> ExtKafka["External Kafka (Cross-Account)"]
     
+    %% External Kafka consumers
     ExtKafka --> AccountA["Consumer Account A"]
     ExtKafka --> AccountB["Consumer Account B"]
 ```
@@ -181,7 +187,7 @@ All the adapters normalize to unified Protobuf schema before hitting our interna
 
 Going with **self-managed ClickHouse** on EC2 because the managed options aren't there yet for our scale. Running on `r5.4xlarge` instances with NVMe SSD storage.
 
-**Table structure**: ReplacingMergeTree partitioned by date/sport, sorted by game_id/player_id. This gives us stupid fast queries and automatic deduplication.
+**Table structure**: ReplacingMergeTree partitioned by date/sport, sorted by game_id/player_id. This gives us extremely fast queries and automatic deduplication.
 
 **Data lifecycle:**
 - Hot (1-30 days): Fast SSD storage in ClickHouse for real-time queries
