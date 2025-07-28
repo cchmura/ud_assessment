@@ -243,12 +243,12 @@ Topic: nfl.odds.live
 
 **Real-world integration patterns:**
 
-*High-volume partners (DraftKings-style):*
+*High-volume partners (Tier 1 sportsbooks)::*
 - Dedicated Kafka cluster to isolate their traffic
 - Reserved bandwidth allocation during peak events
 - Failover topics for when their stuff breaks
 
-*Multi-region partners (FanDuel-style):*
+*Multi-region partners (Global or DR-sensitive clients):*
 - Cross-region Kafka replication for their DR requirements
 - Custom serialization formats because everyone wants something different
 - Rate limiting per partner so one bad consumer doesn't kill everyone
