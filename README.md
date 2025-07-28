@@ -36,31 +36,31 @@ flowchart TD
     MLBPubSub[External MLB Pub/Sub Feed]
 
     %% Adapters
-    NFLKafka --> NFLIngest["NFL Ingest Adapter\n(Go Service)"]
-    NBAPush --> NBAIngest["NBA Ingest Adapter\n(Go Service)"]
-    MLBPubSub --> MLBIngest["MLB Ingest Adapter\n(Go Service)"]
+    NFLKafka --> NFLIngest["NFL Ingest Adapter(Go Service)"]
+    NBAPush --> NBAIngest["NBA Ingest Adapter(Go Service)"]
+    MLBPubSub --> MLBIngest["MLB Ingest Adapter(Go Service)"]
 
     %% Internal Kafka
-    NFLIngest --> RawKafka["Internal Kafka Cluster\nTopics: nfl.raw, nba.raw, mlb.raw\nPartitions: 50/10/5\nReplication: 3x"]
+    NFLIngest --> RawKafka["Internal Kafka Cluster\nTopics: nfl.raw, nba.raw, mlb.raw\nPartitions: 50/10/5 Replication: 3x"]
     NBAIngest --> RawKafka
     MLBIngest --> RawKafka
 
     %% Processing Pipeline
-    RawKafka --> Normalizer["Event Normalizer\n• Schema validation\n• Format standardization\n• Deduplication"]
-    Normalizer --> NormKafka["Internal Kafka\nNormalized Topics"]
+    RawKafka --> Normalizer["Event Normalizer • Schema validation • Format standardization • Deduplication"]
+    Normalizer --> NormKafka["Internal Kafka Normalized Topics"]
     
-    NormKafka --> NFLOdds["NFL Odds Calculator\n(Python/Rust)"]
-    NormKafka --> NBAOdds["NBA Odds Calculator\n(Python/Rust)"]
-    NormKafka --> MLBOdds["MLB Odds Calculator\n(Python/Rust)"]
+    NormKafka --> NFLOdds["NFL Odds Calculator (Python/Rust)"]
+    NormKafka --> NBAOdds["NBA Odds Calculator (Python/Rust)"]
+    NormKafka --> MLBOdds["MLB Odds Calculator (Python/Rust)"]
 
     %% Output
     NFLOdds --> Publisher["Odds Publisher Service"]
     NBAOdds --> Publisher
     MLBOdds --> Publisher
     
-    Publisher --> Redis["Redis Cache\nCluster Mode"]
-    Publisher --> ClickHouse["ClickHouse Analytics\nReplacingMergeTree"]
-    Publisher --> ExtKafka["External Kafka\n(Cross-Account)"]
+    Publisher --> Redis["Redis Cache Cluster Mode"]
+    Publisher --> ClickHouse["ClickHouse Analytics ReplacingMergeTree"]
+    Publisher --> ExtKafka["External Kafka (Cross-Account)"]
     
     ExtKafka --> AccountA["Consumer Account A"]
     ExtKafka --> AccountB["Consumer Account B"]
@@ -166,11 +166,39 @@ All adapters normalize external formats to unified Protobuf schema before publis
 - **Replication factor**: 3 with min.insync.replicas=2
 - **Performance tuning**: SSD storage, optimized network throughput
 
-### Cross-Account Streaming
-- **Connectivity**: AWS PrivateLink for secure cross-account access
-- **Authentication**: IAM-based SASL authentication with scoped roles
-- **Schema Management**: Confluent Schema Registry with Avro/Protobuf
-- **Monitoring**: Producer/consumer lag, delivery latency, error rates
+### Cross-Account Kafka Integration Deep Dive
+
+#### Authentication & Authorization Patterns
+```yaml
+# Example Kafka ACL for external consumer
+Topic: nfl.odds.live
+  Consumer: underdog-fantasy-prod
+  Permissions: READ
+  IP Whitelist: 10.0.0.0/8
+  Authentication: IAM Role Assumption
+```
+
+**Challenge**: Schema evolution when external consumers can't update immediately
+- **Backward Compatibility**: Maintain old fields during transitions
+- **Versioned Topics**: `nfl.odds.v1` → `nfl.odds.v2` with gradual migration
+- **Consumer Capability Detection**: Headers indicating supported schema versions
+
+#### Partner Consumer Health Monitoring
+- **Cross-Account CloudWatch Metrics**: Shared dashboards showing consumer lag per partner
+- **Automated Partner Notifications**: Slack/email alerts when their consumers fall behind
+- **Circuit Breaker Integration**: Temporarily pause low-priority partners during overload
+- **SLA Tracking**: Per-partner delivery SLA monitoring and reporting
+
+#### Real-World Integration Examples
+**DraftKings-style Integration:**
+- Dedicated Kafka cluster for high-volume partners
+- Reserved bandwidth allocation during peak events
+- Failover topics for partner-side outages
+
+**FanDuel-style Integration:**
+- Multi-region Kafka replication for partner DR requirements
+- Custom serialization formats per partner preference
+- Rate limiting per partner to prevent resource exhaustion
 
 ### Exactly-Once Guarantees
 - Kafka producers with `enable.idempotence=true`
@@ -221,96 +249,178 @@ All adapters normalize external formats to unified Protobuf schema before publis
 
 ---
 
-## 8. Security & Compliance
+## 8. Game Day Operations & Reliability
 
-### Access Control
-- **AWS IAM**: Least-privilege roles with account-level isolation
-- **Kubernetes RBAC**: Namespace-scoped access for development teams
-- **Secrets Management**: AWS Secrets Manager with KMS encryption, accessed via IRSA
+### Traffic Spike Management
+During major events (Super Bowl, NBA Finals), traffic can spike 10-50x normal levels:
+- **Predictive Scaling**: Auto-scale based on game schedules and historical patterns, not just reactive metrics
+- **Circuit Breakers**: Fail fast when odds calculation can't keep up, preventing cascade failures
+- **Graceful Degradation**: Serve cached odds when real-time pipeline is overwhelmed
+- **Hot Standby**: Pre-warmed compute capacity allocated for championship games and playoffs
 
-### Data Protection
-- **Encryption**: TLS 1.2+ for data in transit, KMS for data at rest
-- **Network Security**: Private subnets, Security Groups, VPC Flow Logs
-- **Container Scanning**: Trivy in CI pipeline blocking vulnerable images
+### Live Game Monitoring
+- **Business-Critical Alerts**: "No odds updates for live NFL game in 30 seconds" (not just CPU/memory thresholds)
+- **End-to-End Latency Tracking**: Monitor complete pipeline from field event to external Kafka delivery
+- **Data Quality Validation**: Real-time anomaly detection for odds that violate business rules (negative spreads, impossible totals)
+- **Feed Health Monitoring**: Track upstream data provider connectivity and data freshness
 
-### Compliance & Auditing
-- **AWS CloudTrail**: All API calls logged and retained
-- **Kubernetes Audit Logs**: Pod and API server activity tracking
-- **Infrastructure Scanning**: tfsec for Terraform, kube-bench for CIS compliance
+### Sports-Specific Operational Patterns
 
----
+#### NFL (High Burst, Predictable)
+- **Sunday Kickoff Scaling**: Pre-scale 30 minutes before 1PM/4PM/8PM Eastern games
+- **Red Zone Events**: 5-10x spike in updates during scoring drives and two-minute warnings
+- **Playoff Capacity**: Reserve dedicated compute pools weeks in advance for postseason
 
-## 9. Scaling & Cost Optimization
+#### NBA (Steady State, Longer Duration)  
+- **4th Quarter Ramp**: Gradual scaling increase as games reach final 6 minutes
+- **Overtime Handling**: Sustained high load patterns, not burst traffic
+- **Back-to-Back Games**: Intelligent resource sharing across concurrent games
 
-### Autoscaling Strategy
-- **Horizontal Pod Autoscaler**: CPU/memory-based scaling for compute services
-- **Cluster Autoscaler**: Dynamic node provisioning based on pod demand
-- **Kafka Consumer Scaling**: HPA based on consumer lag metrics
-- **Custom Metrics**: Scaling based on business metrics (updates/sec, queue depth)
+#### MLB (Consistent, Lower Volume)
+- **Late Inning Scaling**: Predictable patterns during innings 7-9
+- **Postseason Profile**: 3-5x normal traffic during October baseball
 
-### Cost Management
-- **Instance Mix**: 60% on-demand, 40% spot instances for cost efficiency
-- **Reserved Capacity**: 1-year RIs for baseline production workloads
-- **Resource Optimization**: VPA recommendations, rightsizing based on actual usage
-- **Lifecycle Policies**: Automated data archival to reduce storage costs
-
-**Estimated Monthly Cost (Production):**
-- EKS + Compute: $2,000
-- MSK (Kafka): $3,500  
-- RDS PostgreSQL: $800
-- Redis: $400
-- ClickHouse: $1,200
-- Storage (S3): $150
-- **Total: ~$8,050/month**
+### Incident Response
+- **Sport-Specific Runbooks**: NFL timeout handling differs from NBA fouling situations
+- **Automated Remediation**: Auto-restart stuck odds calculators, rebalance Kafka partitions
+- **Partner Communication**: Automated notifications to external Kafka consumers during outages
 
 ---
 
-## 10. Disaster Recovery & Risk Mitigation
+## 9. Technical Risk Assessment & Domain Challenges
 
-### High Availability Design
-- **Multi-AZ deployment** for all stateful services
-- **Cross-region backup replication** for critical data
-- **Service isolation** by sport to prevent cascading failures
-- **Circuit breakers** and retry logic with exponential backoff
+### High-Risk Scenarios
 
-### Recovery Objectives
-- **RPO (Recovery Point Objective)**: ≤5 minutes for odds data
-- **RTO (Recovery Time Objective)**: <15 minutes for component failures, <4 hours for region failover
-- **Backup Strategy**: Daily snapshots with automated restore testing
+#### NFL Sunday Traffic Crush
+- **Likelihood**: High | **Impact**: Critical
+- **Scenario**: 4-6 concurrent games with 300M updates each creating 125K+/sec sustained load
+- **Mitigation**: Dedicated NFL compute pools, pre-game load testing, reserved instance capacity
+- **Early Warning**: Monitor pregame traffic 2 hours before kickoff for scaling validation
 
-### Failure Scenarios
-- **Kafka Consumer Lag**: Autoscaling consumers, alert thresholds
-- **Database Failover**: RDS Multi-AZ automatic failover
-- **Region Outage**: Cross-region DR with manual promotion
-- **Cost Overrun**: Budget alerts, Kubecost monitoring, lifecycle policies
+#### Kafka Consumer Lag During Championship Events
+- **Likelihood**: Medium | **Impact**: High
+- **Scenario**: External consumers can't keep up with playoff traffic, causing backpressure
+- **Mitigation**: Consumer group health monitoring, automatic partition rebalancing, DLQ overflow handling
+- **Monitoring**: Alert when any consumer group falls >10 seconds behind
+
+#### ClickHouse Write Bottleneck
+- **Likelihood**: Medium | **Impact**: Medium  
+- **Scenario**: Analytics writes become bottleneck during sustained high-throughput periods
+- **Mitigation**: Async buffered writes via Kafka, materialized views for real-time aggregations
+- **Fallback**: Temporary write queueing with S3 backup during outages
+
+### Domain-Specific Technical Challenges
+
+#### Data Consistency & Ordering
+**Challenge**: Sports events can arrive out-of-order due to network issues or feed delays
+- **Impact**: Incorrect odds calculations if touchdown happens before the preceding play
+- **Solution**: Event sequence numbering, time-windowed sorting, late-arrival handling
+- **Example**: Buffer events for 2-second window to reorder before odds calculation
+
+#### Regulatory Compliance (Gambling Industry)
+**Challenge**: Audit trails required for all odds changes due to gaming regulations
+- **Requirements**: Immutable logs, timestamp precision, change attribution
+- **Implementation**: ClickHouse audit tables, cryptographic signing of odds updates
+- **Retention**: 7-year compliance retention vs. 90-day operational retention
+
+#### Cross-Account Consumer Dependencies
+**Challenge**: External Kafka consumers in partner accounts have their own SLA requirements
+- **Problem**: Partner system outages can cause backpressure in our pipeline
+- **Solution**: Per-consumer monitoring, circuit breakers, independent consumer group scaling
+- **Monitoring**: Track consumer health across accounts, alert on partner-side issues
+
+#### Feed Provider Reliability
+**Challenge**: Upstream sports data providers have varying reliability and latency characteristics
+- **NFL Feed**: High reliability, low latency, but occasional burst delays
+- **NBA Feed**: Consistent latency but prone to connection drops during peak traffic
+- **MLB Feed**: Generally reliable but slower during playoff games
+- **Mitigation**: Provider-specific timeout configurations, fallback data sources, health scoring
+
+### Data Quality & Business Logic Validation
+
+#### Real-Time Anomaly Detection
+- **Impossible Odds**: Negative point spreads, totals below game score
+- **Temporal Violations**: Odds updates for completed games
+- **Business Rule Violations**: Spreads that exceed configured limits
+- **Implementation**: Stream processing rules engine with immediate alerts
+
+#### Corrupted Feed Handling
+- **Malformed Messages**: Schema validation with DLQ routing
+- **Duplicate Events**: Deduplication based on event ID and timestamp
+- **Missing Critical Fields**: Default value injection vs. message rejection policies
+- **Recovery**: Replay capability from Kafka for data correction scenarios
 
 ---
 
-## 11. Implementation Roadmap
+## 10. Cost Optimization & Lessons from Production Sports Systems
 
-### Phase 1: Foundation (Weeks 1-2)
-- AWS account setup and VPC networking
-- EKS cluster deployment with ArgoCD
-- Terraform/Terragrunt repository structure
-- Basic observability stack (Prometheus, Grafana)
+### Smart Scaling Based on Sports Calendar
+- **NFL Season**: Sept-Feb high capacity, Mar-Aug minimal (80% cost reduction in off-season)
+- **March Madness**: 3-week spike requiring temporary infrastructure expansion
+- **Playoff Multipliers**: NBA/MLB playoffs require 3-5x normal capacity allocation
+- **Cross-Sport Optimization**: MLB peak (April-Oct) offsets NFL off-season costs
 
-### Phase 2: Core Pipeline (Weeks 3-4)
-- MSK Kafka cluster deployment
-- PostgreSQL and Redis setup
-- NFL ingestion adapter and odds calculator (MVP)
-- Internal Kafka topic structure
+### Real-World Cost Patterns
+**Estimated Monthly Costs:**
+- **Peak Season (Oct-Jan)**: $12,000/month (NFL + NBA + MLB playoffs)
+- **Off-Season (Mar-Aug)**: $3,000/month (minimal NFL, baseball only)
+- **Annual Average**: $8,050/month
+- **Cost per Million Updates**: ~$0.08 (industry benchmark: $0.15-0.25)
 
-### Phase 3: Analytics & Expansion (Weeks 5-6)
-- ClickHouse deployment and data modeling
-- NBA and MLB pipeline extension
-- Cross-account Kafka integration
-- Load testing and performance tuning
+### Lessons from DraftKings/FanDuel Scale Operations
 
-### Phase 4: Production Readiness (Week 7+)
-- Security hardening and compliance validation
-- Disaster recovery testing
-- Performance optimization
-- Documentation and runbooks
+#### What Traditional Web Scaling Gets Wrong
+- **Standard Auto-scaling**: React to load after it hits (too late for sports)
+- **Generic HPA Metrics**: CPU/memory don't predict sports traffic patterns
+- **Database Scaling**: RDBMS assumptions break with time-series sports data
+
+#### Sports-Specific Scaling Insights
+- **Predictive Scaling**: Game schedules known months in advance, pre-scale accordingly
+- **Event-Driven Capacity**: Scale based on game state (2-minute warning, overtime) not just volume
+- **Partner-Aware Scaling**: External consumer capacity affects your scaling needs
+- **Regulatory Scaling**: Compliance systems need different scaling patterns than real-time systems
+
+#### Infrastructure Anti-Patterns in Sports Betting
+- **Shared Compute Pools**: NFL traffic kills NBA performance during concurrent games
+- **Generic Caching**: Sports data has unique freshness requirements (odds vs. stats vs. scores)
+- **Standard Database Patterns**: Sports data is heavily time-series, not CRUD
+- **Uniform Monitoring**: Different sports need different alerting thresholds
+
+### Advanced Cost Optimization
+- **Spot Instance Strategies**: Use for analytics workloads, not real-time odds calculation
+- **Reserved Instance Planning**: Buy 1-year RIs based on minimum capacity, not peak
+- **Multi-Region Cost Arbitrage**: Compute in cheaper regions for non-latency-critical workloads
+- **Data Lifecycle Economics**: Hot storage costs vs. query performance trade-offs
+
+**Cost Monitoring & Governance:**
+- **Kubecost Integration**: Track cost per sport, per game, per partner consumer
+- **Budget Alerts**: Per-sport spending limits with automatic scaling limits
+- **ROI Tracking**: Cost per odds update vs. business value generated
+- **Chargeback Model**: Internal cost allocation to product teams by resource usage
+
+---
+
+## 11. Security, Compliance & Disaster Recovery
+
+### Security & Access Control
+- **AWS IAM**: Account-level isolation with least-privilege cross-account roles
+- **Kubernetes RBAC**: Namespace-scoped access, sport-specific team boundaries
+- **Secrets Management**: AWS Secrets Manager with automatic rotation, IRSA integration
+- **Network Security**: Private subnets, Security Groups, encrypted transit (TLS 1.2+)
+- **Container Security**: Trivy scanning in CI, distroless base images, non-root execution
+
+### Gambling Industry Compliance
+- **Audit Requirements**: 7-year retention of all odds changes for regulatory review
+- **Data Integrity**: Cryptographic signing of odds updates, tamper-evident storage
+- **Access Logging**: Complete audit trail of who changed what odds when
+- **Regional Compliance**: GDPR (EU customers), state gaming regulations (US)
+
+### Disaster Recovery Strategy
+- **RPO/RTO Targets**: ≤5 minutes data loss, <15 minutes recovery for component failures
+- **Multi-AZ Foundation**: All stateful services deployed across 3+ availability zones
+- **Cross-Region Backup**: Daily snapshots replicated to secondary region
+- **DR Testing**: Quarterly failover drills during off-season periods
+- **Partner Communication**: Automated DR notifications to external Kafka consumers
 
 ---
 
