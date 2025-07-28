@@ -205,42 +205,40 @@ NBAPush[External NBA Push Stream]
 MLBPubSub[External MLB Pub/Sub Feed]
 
 %% Adapters
-NFLKafka --> NFLIngest[NFL Ingest Adapter\n(Go Service)]
-NBAPush --> NBAIngest[NBA Ingest Adapter\n(Go Service)]
-MLBPubSub --> MLBIngest[MLB Ingest Adapter\n(Go Service)]
+NFLKafka --> NFLIngest["NFL Ingest Adapter\n(Go Service)"]
+NBAPush --> NBAIngest["NBA Ingest Adapter\n(Go Service)"]
+MLBPubSub --> MLBIngest["MLB Ingest Adapter\n(Go Service)"]
 
 %% Internal Kafka - Raw
-NFLIngest --> RawKafka[Internal Kafka Cluster\nTopics: nfl.raw, nba.raw, mlb.raw\nPartitions: 50/10/5\nReplication: 3x]
+NFLIngest --> RawKafka["Internal Kafka Cluster\nTopics: nfl.raw, nba.raw, mlb.raw\nPartitions: 50/10/5\nReplication: 3x"]
 NBAIngest --> RawKafka
 MLBIngest --> RawKafka
 
 %% Event Normalizer
-RawKafka --> Normalizer[Event Normalizer\n• Schema validation\n• Format standardization\n• Metadata enrichment\n• Deduplication]
+RawKafka --> Normalizer["Event Normalizer\n• Schema validation\n• Format standardization\n• Metadata enrichment\n• Deduplication"]
 
 %% Internal Kafka - Normalized
-Normalizer --> NormKafka[Internal Kafka Cluster\nTopics: nfl.normalized, nba.normalized, mlb.normalized]
+Normalizer --> NormKafka["Internal Kafka Cluster\nTopics: nfl.normalized, nba.normalized, mlb.normalized"]
 
 %% Odds Calculators
-NormKafka --> NFLOdds[NFL Odds Calculator\n(Python/Rust)]
-NormKafka --> NBAOdds[NBA Odds Calculator\n(Python/Rust)]
-NormKafka --> MLBOdds[MLB Odds Calculator\n(Python/Rust)]
+NormKafka --> NFLOdds["NFL Odds Calculator\n(Python/Rust)"]
+NormKafka --> NBAOdds["NBA Odds Calculator\n(Python/Rust)"]
+NormKafka --> MLBOdds["MLB Odds Calculator\n(Python/Rust)"]
 
 %% Odds Publisher
-NFLOdds --> Publisher[Odds Publisher Service\n• Writes to:\n- External Kafka\n- ClickHouse\n- Redis]
+NFLOdds --> Publisher["Odds Publisher Service\n• Writes to:\n- External Kafka\n- ClickHouse\n- Redis"]
 NBAOdds --> Publisher
 MLBOdds --> Publisher
 
 %% Output Destinations
-Publisher --> Redis[Redis Cache\nCluster Mode - 3 Nodes]
-Publisher --> ClickHouse[ClickHouse Analytics Platform\nReplacingMergeTree + S3 Tiering]
-Publisher --> ExtKafka[External Kafka\n(Cross-Account)]
+Publisher --> Redis["Redis Cache\nCluster Mode - 3 Nodes"]
+Publisher --> ClickHouse["ClickHouse Analytics Platform\nReplacingMergeTree + S3 Tiering"]
+Publisher --> ExtKafka["External Kafka\n(Cross-Account)"]
 
 %% External Kafka Consumers
-ExtKafka --> AccountA[Account A - Consumer 1]
-ExtKafka --> AccountB[Account B - Consumer 2]
+ExtKafka --> AccountA["Account A - Consumer 1"]
+ExtKafka --> AccountB["Account B - Consumer 2"]
 ```
-
-
 
 ##
 ## Decision: Architecture Style
