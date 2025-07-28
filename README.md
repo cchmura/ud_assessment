@@ -813,6 +813,20 @@ This message streaming design enables:
 #
 ## 9.1 Single Pane of Glass Design
 
+```text
+Application Metrics → Prometheus → Grafana Dashboard
+     │                    │            │
+     │                    │            └─ Alerts → PagerDuty/Slack
+     │                    └─ Time series storage
+     └─ Custom metrics + OpenTelemetry traces
+
+Application Logs → Loki → Grafana Explore
+     │             │        │
+     │             │        └─ Log correlation with traces
+     │             └─ Log aggregation
+     └─ Structured JSON logs
+```
+
 ##
 ## Decision: Unified Observability Stack
 - deploy the **Grafana/Loki/Prometheus/Tempo** stack for a unified observability plane, integrated with AWS services.
