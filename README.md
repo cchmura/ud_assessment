@@ -31,57 +31,52 @@ Event-driven microservices with sport-specific isolation. Basically each sport (
 
 ```mermaid
 flowchart TD
-    %% External Feeds
-    NFLKafka[External NFL Kafka Feed]
-    NBAPush[External NBA Push Stream]
-    MLBPubSub[External MLB Pub/Sub Feed]
 
-    %% Adapters
-    NFLKafka --> NFLIngest["NFL Ingest Adapter (Go Service)"]
-    NBAPush --> NBAIngest["NBA Ingest Adapter (Go Service)"]
-    MLBPubSub --> MLBIngest["MLB Ingest Adapter (Go Service)"]
+  subgraph Ingestion Layer
+    NFLKafka[External NFL Kafka Feed] --> NFLIngest["NFL Ingest Adapter"]
+    NBAPush[External NBA Push Stream] --> NBAIngest["NBA Ingest Adapter"]
+    MLBPubSub[External MLB Pub/Sub Feed] --> MLBIngest["MLB Ingest Adapter"]
+  end
 
-    %% Internal Kafka (Raw Topics)
-    NFLIngest --> RawKafka["Internal Kafka: nfl.raw, nba.raw, mlb.raw"]
+  subgraph Internal Kafka Raw
+    NFLIngest --> RawKafka["Topics: nfl.raw, nba.raw, mlb.raw"]
     NBAIngest --> RawKafka
     MLBIngest --> RawKafka
+  end
 
-    %% Processing Pipeline
-    RawKafka --> Normalizer["Event Normalizer • Schema validation • Deduplication"]
-    Normalizer --> NormKafka["Internal Kafka: nfl.normalized, nba.normalized, mlb.normalized"]
+  subgraph Normalization
+    RawKafka --> Normalizer["Event Normalizer"]
+    Normalizer --> NormKafka["Topics: nfl.normalized, nba.normalized, mlb.normalized"]
+  end
 
-    %% Operational Database (PostgreSQL)
-    PostgreSQL[(PostgreSQL Operational DB)]
+  subgraph Odds Calculation
+    NormKafka --> NFLOdds["NFL Odds Calculator"]
+    NormKafka --> NBAOdds["NBA Odds Calculator"]
+    NormKafka --> MLBOdds["MLB Odds Calculator"]
 
-    %% Odds Calculators
-    NormKafka --> NFLOdds["NFL Odds Calculator (Python/Rust)"]
-    NormKafka --> NBAOdds["NBA Odds Calculator (Python/Rust)"]
-    NormKafka --> MLBOdds["MLB Odds Calculator (Python/Rust)"]
-
-    %% Odds Calculators interact with PostgreSQL (metadata)
-    NFLOdds <--> PostgreSQL
-    NBAOdds <--> PostgreSQL
-    MLBOdds <--> PostgreSQL
-
-    %% Odds Kafka Topics (Calculated Odds)
-    NFLOdds --> OddsKafka["Internal Kafka: nfl.odds, nba.odds, mlb.odds"]
+    NFLOdds --> OddsKafka["Topics: nfl.odds, nba.odds, mlb.odds"]
     NBAOdds --> OddsKafka
     MLBOdds --> OddsKafka
-    
-    %% Publisher Service consuming Odds topics
+  end
+
+  subgraph Storage and Publishing
     OddsKafka --> Publisher["Odds Publisher Service"]
-
-    %% Publisher interacts with PostgreSQL (state, config)
-    Publisher <--> PostgreSQL
-
-    %% Output destinations
-    Publisher --> Redis["Redis Cache Cluster"]
+    Publisher --> Redis["Redis Cache"]
     Publisher --> ClickHouse["ClickHouse Analytics"]
-    Publisher --> ExtKafka["External Kafka (Cross-Account)"]
-    
-    %% External Kafka consumers
+    Publisher --> ExtKafka["External Kafka"]
+  end
+
+  subgraph Consumers
     ExtKafka --> AccountA["Consumer Account A"]
     ExtKafka --> AccountB["Consumer Account B"]
+  end
+
+  subgraph Operational DB
+    PostgreSQL[(Aurora PostgreSQL)] <--> NFLOdds
+    PostgreSQL <--> NBAOdds
+    PostgreSQL <--> MLBOdds
+    PostgreSQL <--> Publisher
+  end
 ```
 
 ### Traffic Reality Check
