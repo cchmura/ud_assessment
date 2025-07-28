@@ -241,6 +241,7 @@ ExtKafka --> AccountB[Account B - Consumer 2]
 ```
 
 
+
 ##
 ## Decision: Architecture Style
 - use a **pure event-driven microservices approach** to enable real-time responsiveness, modular deployments, and system resilience.
