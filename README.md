@@ -50,10 +50,18 @@ flowchart TD
     RawKafka --> Normalizer["Event Normalizer • Schema validation • Deduplication"]
     Normalizer --> NormKafka["Internal Kafka: nfl.normalized, nba.normalized, mlb.normalized"]
 
+    %% Operational Database (PostgreSQL)
+    PostgreSQL[(PostgreSQL Operational DB)]
+
     %% Odds Calculators
     NormKafka --> NFLOdds["NFL Odds Calculator (Python/Rust)"]
     NormKafka --> NBAOdds["NBA Odds Calculator (Python/Rust)"]
     NormKafka --> MLBOdds["MLB Odds Calculator (Python/Rust)"]
+
+    %% Odds Calculators interact with PostgreSQL (metadata)
+    NFLOdds <--> PostgreSQL
+    NBAOdds <--> PostgreSQL
+    MLBOdds <--> PostgreSQL
 
     %% Odds Kafka Topics (Calculated Odds)
     NFLOdds --> OddsKafka["Internal Kafka: nfl.odds, nba.odds, mlb.odds"]
@@ -62,6 +70,9 @@ flowchart TD
     
     %% Publisher Service consuming Odds topics
     OddsKafka --> Publisher["Odds Publisher Service"]
+
+    %% Publisher interacts with PostgreSQL (state, config)
+    Publisher <--> PostgreSQL
 
     %% Output destinations
     Publisher --> Redis["Redis Cache Cluster"]
